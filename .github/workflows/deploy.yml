@@ -24,4 +24,4 @@ jobs:
       - name: Deploy via Docker Compose
         run: |
           echo "Building and restarting the Docker container..."
-          docker-compose up -d --build
+          docker compose up -d --build

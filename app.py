@@ -1,12 +1,11 @@
 import os
 
-from flask import Flask, abort, redirect, render_template, send_file, send_from_directory
+from flask import Flask, redirect, render_template, send_from_directory
 
 app = Flask(__name__)
 
-# CV file can be provided locally or via a hosted URL.
-CV_FILE_PATH = os.environ.get("CV_FILE_PATH", os.path.join(app.root_path, "private_assets", "cv.pdf"))
-CV_URL = os.environ.get("CV_URL")
+# Redirect target for CV
+CV_URL = "https://mega.nz/file/gBI2GTIb#JVTkAmdVdJemgEvu0RA4yfXOWCo24dnw2m6Ra1kvRFU"
 
 @app.route("/")
 def home():
@@ -35,11 +34,7 @@ def blog_omen():
 
 @app.route("/cv")
 def cv():
-    if os.path.exists(CV_FILE_PATH):
-        return send_file(CV_FILE_PATH, mimetype="application/pdf", download_name="cv.pdf")
-    if CV_URL:
-        return redirect(CV_URL, code=302)
-    abort(404)
+    return redirect(CV_URL, code=302)
 
 if __name__ == "__main__":
     app.run(debug=False, host='0.0.0.0')

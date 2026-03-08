@@ -21,10 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Restart Web Service
+      - name: Deploy via Docker Compose
         run: |
-          echo "Deploying the latest main branch..."
-          # Insert command to restart the application, e.g.,
-          # sudo systemctl restart gunicorn
-          # Or if running via a local script:
-          # ./restart_server.sh
+          echo "Building and restarting the Docker container..."
+          docker-compose up -d --build

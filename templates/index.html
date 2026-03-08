@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turing Tested</title>
+
+<!-- Xterm.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+
+<!-- Custom Styles -->
+<link rel="stylesheet" href="/static/style.css">
+
+</head>
+
+<body>
+
+<div class="container">
+    <header>
+        <h1>Turing Tested</h1>
+        <div class="tagline">FOSS shill</div>
+    </header>
+
+    <div class="interests">
+        Interested in system administration, the Linux kernel, and decentralised technologies.
+    </div>
+
+    <div class="terminal-wrapper">
+        <div class="terminal-header">
+            <div class="terminal-buttons">
+                <div class="circle circle-red"></div>
+                <div class="circle circle-yellow"></div>
+                <div class="circle circle-green"></div>
+            </div>
+            <div class="terminal-title">turing@tested:~</div>
+            <div class="terminal-spacer"></div>
+        </div>
+        <div id="terminal"></div>
+    </div>
+</div>
+
+<script type="module">
+import { init, Terminal as GhosttyTerminal } from "https://cdn.jsdelivr.net/npm/ghostty-web/+esm";
+
+let term;
+let isGhostty = false;
+
+try {
+    await init();
+    term = new GhosttyTerminal({
+      cursorBlink: true,
+      fontSize: 15,
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      theme: {
+        background: "#020202",
+        foreground: "#00ff9c",
+        cursor: "#00ff9c",
+        cursorAccent: "#020202",
+        selection: "rgba(0, 255, 156, 0.3)",
+      }
+    });
+    isGhostty = true;
+} catch (e) {
+    console.warn("Falling back to Xterm...", e);
+    term = new window.Terminal({
+        cursorBlink: true,
+        fontSize: 15,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        theme: {
+            background: "#020202",
+            foreground: "#00ff9c",
+            cursor: "#00ff9c",
+            cursorAccent: "#020202",
+            selection: "rgba(0, 255, 156, 0.3)",
+        }
+    });
+}
+
+term.open(document.getElementById("terminal"));
+if(term.focus) term.focus();
+
+let buffer = "";
+
+async function runFortune(term) {
+    term.write("\r\nFetching fortune...\r\n");
+    try {
+        // Using a public fortune API with a cache buster so we don't get the same quote repeatedly
+        const response = await fetch("https://api.justyy.workers.dev/api/fortune?t=" + Date.now());
+        if (response.ok) {
+            const data = await response.text();
+            // Data might come with quotes from this specific API, let's clean it up slightly
+            const cleanData = data.replace(/^"|"$/g, '').replace(/\\n/g, '\r\n').replace(/\\t/g, '\t');
+            term.write("\x1b[36m" + cleanData + "\x1b[0m\r\n");
+        } else {
+            term.write("\x1b[31mError retrieving fortune.\x1b[0m\r\n");
+        }
+    } catch (e) {
+        term.write("\x1b[31mNetwork error retrieving fortune.\x1b[0m\r\n");
+    }
+    prompt();
+}
+
+function prompt() {
+  term.write("\r\n\x1b[1m[turing@tested ~]$\x1b[0m ");
+}
+
+term.write("Use `help` to list available commands.\r\n");
+prompt();
+
+term.onData(e => {
+  if (e === "\r") {
+    const cmdArgs = buffer.trim().split(" ");
+    const cmd = cmdArgs[0];
+    const rawCmd = buffer.trim();
+    buffer = "";
+
+    if (cmd === "help") {
+      term.write("\r\nTuring Tested OS - Help Menu");
+      term.write("\r\n==========================");
+      term.write("\r\n\x1b[32mhelp\x1b[0m       : Show this help message");
+      term.write("\r\n\x1b[32mls\x1b[0m         : List files in current directory");
+      term.write("\r\n\x1b[32mcat [file]\x1b[0m : Display contents of a file (try 'cat about' or 'cat pgp')");
+      term.write("\r\n\x1b[32mopen [app]\x1b[0m : Open an application or page (try 'open blogs')");
+      term.write("\r\n\x1b[32mclear\x1b[0m      : Clear terminal screen");
+      term.write("\r\n\x1b[32mfortune\x1b[0m    : The classic Linux command");
+    }
+    else if (cmd === "ls") {
+      term.write("\r\nabout   pgp   blogs");
+    }
+    else if (rawCmd === "cat about") {
+      term.write("\r\nFOSS shill.");
+      term.write("\r\nInterested in system administration, the Linux kernel, and decentralised technologies.");
+    }
+    else if (rawCmd === "cat pgp") {
+      term.write("\r\nPublic key available at /pgp");
+    }
+    else if (cmd === "cat") {
+      if (cmdArgs.length > 1) {
+          term.write("\r\ncat: " + cmdArgs[1] + ": No such file or directory");
+      } else {
+          term.write("\r\ncat: missing file operand");
+      }
+    }
+    else if (cmd === "clear") {
+      term.write('\x1b[2J\x1b[H');
+      prompt();
+      return;
+    }
+    else if (cmd === "fortune") {
+      runFortune(term);
+      return; // prompt is handled by runFortune async
+    }
+    else if (cmd === "open") {
+      if (cmdArgs.length > 1) {
+        const target = cmdArgs[1];
+        if (["blogs", "about", "pgp"].includes(target)) {
+          term.write(`\r\nNavigating to /${target}...`);
+          setTimeout(() => { window.location = `/${target}`; }, 400);
+        } else {
+          term.write("\r\nopen: unknown target. Available targets: blogs, about, pgp");
+        }
+      } else {
+        term.write("\r\nopen: missing target");
+      }
+    }
+    else if (cmd !== "") {
+      term.write("\r\n\x1b[31mturing: command not found: \x1b[0m" + cmd);
+    }
+    prompt();
+  }
+  else if (e === "\u0003") { // Ctrl+C handling
+    term.write("^C");
+    buffer = "";
+    prompt();
+  }
+  else if (e === "\u007f") {
+    if (buffer.length > 0) {
+      buffer = buffer.slice(0, -1);
+      term.write("\b \b");
+    }
+  }
+  else {
+    buffer += e;
+    term.write(e);
+  }
+});
+</script>
+
+</body>
+</html>

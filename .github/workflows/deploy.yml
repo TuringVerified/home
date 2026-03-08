@@ -1,0 +1,30 @@
+name: Deploy to Self-Hosted Runner
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    # Only run if this is the original repository, not a fork
+    if: github.repository == 'TuringVerified/home' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true))
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Restart Web Service
+        run: |
+          echo "Deploying the latest main branch..."
+          # Insert command to restart the application, e.g.,
+          # sudo systemctl restart gunicorn
+          # Or if running via a local script:
+          # ./restart_server.sh

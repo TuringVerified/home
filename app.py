@@ -22,5 +22,9 @@ def about():
 def robots():
     return send_from_directory(app.static_folder, "robots.txt")
 
+@app.route("/blog/omen-drivers")
+def blog_omen():
+    return render_template("blog_omen.html")
+
 if __name__ == "__main__":
     app.run(debug=True)

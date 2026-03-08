@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CV</title>
+  <style>
+    body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: "Segoe UI", sans-serif; }
+    header { padding: 16px 20px; font-size: 18px; letter-spacing: 0.5px; }
+    iframe { border: none; width: 100%; height: calc(100vh - 56px); background: #0b1224; display: block; }
+    #fallback {
+      display: none;
+      height: calc(100vh - 56px);
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 12px;
+      flex-direction: column;
+      background: #0b1224;
+    }
+    a { color: #7dd3fc; }
+  </style>
+</head>
+<body>
+  <header>Curriculum Vitae</header>
+  <iframe id="cv-frame" src="{{ cv_url }}" allow="fullscreen"></iframe>
+  <div id="fallback">
+    <div>Unable to display the PDF inline. Some browsers block embeds from certain hosts.</div>
+    <div><a href="{{ cv_url }}" rel="noopener" target="_blank">Open the CV directly</a></div>
+  </div>
+  <script>
+    const frame = document.getElementById('cv-frame');
+    const fallback = document.getElementById('fallback');
+    let loaded = false;
+
+    const showFallback = () => {
+      fallback.style.display = 'flex';
+      frame.style.display = 'none';
+    };
+
+    frame.addEventListener('load', () => {
+      loaded = true;
+      fallback.style.display = 'none';
+      frame.style.display = 'block';
+    });
+
+    frame.addEventListener('error', showFallback);
+
+    setTimeout(() => {
+      if (!loaded) {
+        showFallback();
+      }
+    }, 4000);
+  </script>
+</body>
+</html>

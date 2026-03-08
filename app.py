@@ -4,8 +4,9 @@ from flask import Flask, abort, render_template, send_file, send_from_directory
 
 app = Flask(__name__)
 
-# Default CV location can be overridden with CV_FILE_PATH env var.
+# CV file can be provided locally or via a hosted URL.
 CV_FILE_PATH = os.environ.get("CV_FILE_PATH", os.path.join(app.root_path, "private_assets", "cv.pdf"))
+CV_URL = os.environ.get("CV_URL")
 
 @app.route("/")
 def home():
@@ -34,9 +35,11 @@ def blog_omen():
 
 @app.route("/cv")
 def cv():
-    if not os.path.exists(CV_FILE_PATH):
-        abort(404)
-    return send_file(CV_FILE_PATH, mimetype="application/pdf", download_name="cv.pdf")
+    if os.path.exists(CV_FILE_PATH):
+        return send_file(CV_FILE_PATH, mimetype="application/pdf", download_name="cv.pdf")
+    if CV_URL:
+        return render_template("cv_embed.html", cv_url=CV_URL)
+    abort(404)
 
 if __name__ == "__main__":
     app.run(debug=False, host='0.0.0.0')

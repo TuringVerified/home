@@ -1,0 +1,11 @@
+{
+    email tt@turingtested.xyz
+}
+
+turingtested.xyz {
+    reverse_proxy web:80
+}
+
+www.turingtested.xyz {
+    redir https://turingtested.xyz{uri}
+}

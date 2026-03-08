@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, abort, render_template, send_file, send_from_directory
+from flask import Flask, abort, redirect, render_template, send_file, send_from_directory
 
 app = Flask(__name__)
 
@@ -38,7 +38,7 @@ def cv():
     if os.path.exists(CV_FILE_PATH):
         return send_file(CV_FILE_PATH, mimetype="application/pdf", download_name="cv.pdf")
     if CV_URL:
-        return render_template("cv_embed.html", cv_url=CV_URL)
+        return redirect(CV_URL, code=302)
     abort(404)
 
 if __name__ == "__main__":

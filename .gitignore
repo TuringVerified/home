@@ -201,7 +201,13 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Private assets (e.g., CV) kept out of git
+private_assets/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Custom User Uploads
+static/cv.pdf

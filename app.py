@@ -1,6 +1,11 @@
-from flask import Flask, render_template, send_from_directory
+import os
+
+from flask import Flask, abort, render_template, send_file, send_from_directory
 
 app = Flask(__name__)
+
+# Default CV location can be overridden with CV_FILE_PATH env var.
+CV_FILE_PATH = os.environ.get("CV_FILE_PATH", os.path.join(app.root_path, "private_assets", "cv.pdf"))
 
 @app.route("/")
 def home():
@@ -25,6 +30,13 @@ def robots():
 @app.route("/blog/omen-drivers")
 def blog_omen():
     return render_template("blog_omen.html")
+
+
+@app.route("/cv")
+def cv():
+    if not os.path.exists(CV_FILE_PATH):
+        abort(404)
+    return send_file(CV_FILE_PATH, mimetype="application/pdf", download_name="cv.pdf")
 
 if __name__ == "__main__":
     app.run(debug=False, host='0.0.0.0')

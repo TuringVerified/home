@@ -34,7 +34,7 @@ def blog_omen():
 
 @app.route("/cv")
 def cv():
-    return redirect(CV_URL, code=302)
+    return render_template("cv_embed.html")
 
 if __name__ == "__main__":
     app.run(debug=False, host='0.0.0.0')

@@ -5,6 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Omen Drivers - Turing Tested</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+    body { align-items: flex-start; }
+    .container { max-width: 900px; font-size: 1.1rem; }
+    pre, code {
+        background: transparent;
+        border: 1px solid #00ff9c33;
+        color: #e6edf3;
+    }
+    pre {
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+        line-height: 1.6;
+    }
+    code { padding: 2px 5px; border-radius: 4px; font-size: 0.95em; }
+    pre code { border: none; padding: 0; background: transparent; font-size: inherit; }
+    .buffer-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .buffer-block {
+        border: 1px solid #30363d;
+        background: #161b22;
+        padding: 12px;
+        border-radius: 6px;
+        text-align: center;
+        font-size: 13px;
+        min-width: 80px;
+    }
+    .buffer-block.zone    { border-color: #3fb950; }
+    .buffer-block.unknown { border-color: #8b949e; }
+</style>
 </head>
 <body>
 
@@ -21,13 +56,546 @@
         <a href="/pgp">[pgp]</a>
     </div>
 
-    <div style="margin-top: 50px;">
-        <p style="color: #e6e6e6;">Content goes here...</p>
+    <div style="margin-top: 50px;" class="blog-content">
+
+        <p>HP's Omen series comes with a great suite of features via the Omen Gaming Hub. These include a full-fledged lighting studio for the keyboard backlights (it even ships with a built-in audio visualiser and a bunch of themes), GPU performance modes, fan speed support and statistics. Unfortunately, this technology is only available on Windows through their proprietary app, with no plans from HP's end to expand support for Linux users as well.</p>
+
+        <p>This makes our lives harder, as none of these features are available for Linux out-of-the-box. While there has been significant effort from the community to reverse-engineer parts of the stack and develop support for Linux, most features still remain unsupported. The Linux ecosystem still remains incomplete and undocumented. Through this blog series, I will be attempting to implement some of these features myself, something like <code>asusctl</code>, but for Omen laptops. My target is to create at least a complete utility and drivers to interface with software like OpenRGB.</p>
+
+        <p>Fortunately much of the groundwork has already been laid down by community members. Most significantly, <a href="https://github.com/pelrun/hp-omen-linux-module" target="_blank">pelrun</a> has done a significant amount of reverse-engineering of the interfaces exposed by HP's firmware. Their work documents parts of the WMI/ACPI interface used by the Omen Gaming Hub on Windows and shows how they can be triggered outside of Windows as well. Their fork of the hp-wmi driver provided great insight into the command structure used by the firmware. However, the current solution is not a fully-integrated Linux solution yet. My goal with this project is to build on that and move towards something more cohesive.</p>
+
+        <p>The Omen series exposes device controls through ACPI methods that are accessible through WMI. Unfortunately, HP does not make any documentation for these public, forcing us to poke around quite a bit in order to find relevant values. Like for example, the GUID for the WMI interface on my system was:</p>
+
+        <pre><code>5FB7F034-2C63-45E9-BE91-3D44E2C707E4</code></pre>
+
+        <p>This will enable us to access the firmware like so:</p>
+
+        <div class="omen-diagram">
+            <h2>How Omen Features Work</h2>
+            <div class="columns">
+                <div class="column">
+                    <h3>Windows</h3>
+                    <div class="node app">Omen Gaming Hub</div>
+                    <div class="flow"></div>
+                    <div class="node api">Windows WMI API</div>
+                    <div class="flow"></div>
+                    <div class="node firmware">ACPI / WMI Firmware</div>
+                    <div class="flow"></div>
+                    <div class="node hardware">Laptop Hardware<br>(RGB &bull; Fans &bull; GPU modes)</div>
+                </div>
+                <div class="column">
+                    <h3>Linux (Goal)</h3>
+                    <div class="node app">OpenRGB / omenctl</div>
+                    <div class="flow"></div>
+                    <div class="node driver">Custom Kernel Driver</div>
+                    <div class="flow"></div>
+                    <div class="node api">Linux WMI Subsystem</div>
+                    <div class="flow"></div>
+                    <div class="node firmware">ACPI / WMI Firmware</div>
+                    <div class="flow"></div>
+                    <div class="node hardware">Laptop Hardware<br>(RGB &bull; Fans &bull; GPU modes)</div>
+                </div>
+            </div>
+        </div>
+
+        <style>
+            .omen-diagram {
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                background: #0f1117;
+                padding: 40px;
+                border-radius: 12px;
+                color: #e6edf3;
+                margin: 30px 0;
+            }
+            .omen-diagram h2 {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            .columns {
+                display: flex;
+                gap: 60px;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .column {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 220px;
+            }
+            .column h3 {
+                margin-bottom: 15px;
+                color: #8be9fd;
+            }
+            .node {
+                padding: 14px 18px;
+                border-radius: 8px;
+                margin: 6px 0;
+                width: 220px;
+                text-align: center;
+                border: 1px solid #30363d;
+                background: #161b22;
+                box-shadow: 0 0 8px rgba(255,255,255,0.05);
+            }
+            .node.app    { border-color: #58a6ff; }
+            .node.driver { border-color: #3fb950; }
+            .node.api    { border-color: #d29922; }
+            .node.firmware { border-color: #a371f7; }
+            .node.hardware { border-color: #8b949e; }
+            .flow {
+                width: 2px;
+                height: 28px;
+                background: linear-gradient(to bottom, transparent, #58a6ff, transparent);
+                animation: flow 2s infinite;
+            }
+            @keyframes flow {
+                0%   { opacity: 0; }
+                50%  { opacity: 1; }
+                100% { opacity: 0; }
+            }
+        </style>
+
+        <p>To test this out, I wrote a minimal external kernel module, that registered itself with the WMI subsystem and attached itself to the firmware interface exposed by the system:</p>
+
+        <pre><code class="language-c">#include &lt;linux/module.h&gt;
+#include &lt;linux/wmi.h&gt;
+
+#define HPWMI_BIOS_GUID "5FB7F034-2C63-45E9-BE91-3D44E2C70733"
+
+static int omen_wmi_probe(struct wmi_device *wdev, const void *context)
+{
+    pr_info("omen_wmi: device detected\n");
+    return 0;
+}
+
+static void omen_wmi_remove(struct wmi_device *wdev)
+{
+    pr_info("omen_wmi: device removed\n");
+}
+
+static const struct wmi_device_id omen_wmi_id_table[] = {
+    { HPWMI_BIOS_GUID, NULL },
+    { }
+};
+
+static struct wmi_driver omen_wmi_driver = {
+    .driver = {
+        .name = "omen_wmi",
+    },
+    .id_table = omen_wmi_id_table,
+    .probe = omen_wmi_probe,
+    .remove = omen_wmi_remove,
+};
+
+module_wmi_driver(omen_wmi_driver);
+
+MODULE_LICENSE("GPL");</code></pre>
+
+        <p>The <code>Makefile</code> is a separate file in the same directory (save it as <code>Makefile</code> with no extension):</p>
+
+        <pre><code class="language-makefile">obj-m += omen_wmi_bridge.o
+
+all:
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+
+clean:
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean</code></pre>
+
+        <p>In order to run this module:</p>
+
+        <pre><code class="language-sh">make
+sudo rmmod omen_wmi_bridge   # No need to run this the first time
+sudo insmod omen_wmi_bridge.ko
+sudo dmesg -w</code></pre>
+
+        <p>Et voilà, you should see the driver when you run <code>lsmod | grep omen</code>. However, this was a very minimal example to show the structure of the driver. However, we aren't exposing anything to the userspace yet. In order to control the backlight, we need to create interfaces that userspace programs will be able to interact with.</p>
+        <p>The ACPI interface used by Omen's firmware expects a 128-byte buffer as input. A significant chunk has already been reverse-engineered by pelrun and reveals some important details about the internals of the firmware and the structure of this buffer. The keyboard is divided into 4 different zones (Zone0 - Right, Zone1- Middle, Zone2 - Left, Zone3 - WASD) and the buffer looks like this: </p>
+
+        <div class="omen-diagram">
+
+<h2>Firmware Command Buffer (128 bytes)</h2>
+
+<div class="buffer-container">
+
+<div class="buffer-block unknown">0-3<br>PASS status</div>
+<div class="buffer-block unknown">4-24<br>Unknown fields</div>
+
+<div class="buffer-block zone">25<br>Z1 R</div>
+<div class="buffer-block zone">26<br>Z1 G</div>
+<div class="buffer-block zone">27<br>Z1 B</div>
+
+<div class="buffer-block zone">28<br>Z2 R</div>
+<div class="buffer-block zone">29<br>Z2 G</div>
+<div class="buffer-block zone">30<br>Z2 B</div>
+
+<div class="buffer-block zone">31<br>Z3 R</div>
+<div class="buffer-block zone">32<br>Z3 G</div>
+<div class="buffer-block zone">33<br>Z3 B</div>
+
+<div class="buffer-block zone">34<br>Z4 R</div>
+<div class="buffer-block zone">35<br>Z4 G</div>
+<div class="buffer-block zone">36<br>Z4 B</div>
+
+<div class="buffer-block unknown">37-127<br>Unknown / unused</div>
+
+</div>
+
+
+</div>
+<p> If you want to play around with this yourself, here is the full kernel module:</p>
+
+        <details class="code-collapse">
+            <summary>omen_wmi_bridge.c &mdash; full source</summary>
+            <pre><code class="language-c">#include &lt;linux/module.h&gt;
+#include &lt;linux/kernel.h&gt;
+#include &lt;linux/init.h&gt;
+#include &lt;linux/acpi.h&gt;
+#include &lt;linux/wmi.h&gt;
+#include &lt;linux/kobject.h&gt;
+#include &lt;linux/sysfs.h&gt;
+
+#define HPWMI_BIOS_GUID "5FB7F034-2C63-45E9-BE91-3D44E2C707E4"
+
+#define HPWMI_FOURZONE 0x20009
+
+#define HPWMI_FOURZONE_COLOR_GET 2
+#define HPWMI_FOURZONE_COLOR_SET 3
+#define HPWMI_FOURZONE_BRIGHT_GET 4
+#define HPWMI_FOURZONE_BRIGHT_SET 5
+#define HPWMI_FOURZONE_ANIM_GET  6
+#define HPWMI_FOURZONE_ANIM_SET  7
+
+#define ZONE_BASE  25
+#define ZONE_COUNT 4
+
+struct bios_args {
+    u32 signature;
+    u32 command;
+    u32 commandtype;
+    u32 datasize;
+    u8  data[128];
+};
+
+static struct kobject *omen_kobj;
+
+/* ---------- WMI helper ---------- */
+
+static int omen_wmi_query(int cmdtype, u8 *buffer)
+{
+    struct bios_args args = {0};
+    struct acpi_buffer input;
+    struct acpi_buffer output = { ACPI_ALLOCATE_BUFFER, NULL };
+    union acpi_object *obj;
+    int ret = -EINVAL;
+
+    args.signature   = 0x55434553;
+    args.command     = HPWMI_FOURZONE;
+    args.commandtype = cmdtype;
+    args.datasize    = 128;
+
+    if (buffer &amp;&amp; cmdtype == HPWMI_FOURZONE_COLOR_SET)
+        memcpy(args.data, buffer, 128);
+
+    input.length  = sizeof(args);
+    input.pointer = &amp;args;
+
+    wmi_evaluate_method(HPWMI_BIOS_GUID, 0, 3, &amp;input, &amp;output);
+
+    obj = output.pointer;
+
+    if (!obj || obj-&gt;type != ACPI_TYPE_BUFFER)
+        goto out;
+
+    if (buffer &amp;&amp; cmdtype == HPWMI_FOURZONE_COLOR_GET)
+        memcpy(buffer, obj-&gt;buffer.pointer + 8, 128);
+
+    ret = 0;
+
+out:
+    kfree(obj);
+    return ret;
+}
+
+/* ---------- zone interface ---------- */
+
+static ssize_t zone_show(struct kobject *kobj,
+                         struct kobj_attribute *attr,
+                         char *buf)
+{
+    u8 state[128];
+    int zone = attr-&gt;attr.name[4] - '0';
+    int off  = ZONE_BASE + zone * 3;
+
+    if (omen_wmi_query(HPWMI_FOURZONE_COLOR_GET, state))
+        return -EIO;
+
+    return sprintf(buf, "%02x%02x%02x\n",
+                   state[off], state[off+1], state[off+2]);
+}
+
+static ssize_t zone_store(struct kobject *kobj,
+                          struct kobj_attribute *attr,
+                          const char *buf,
+                          size_t count)
+{
+    u8 state[128];
+    unsigned int rgb;
+    int zone = attr-&gt;attr.name[4] - '0';
+    int off  = ZONE_BASE + zone * 3;
+
+    if (kstrtouint(buf, 16, &amp;rgb))
+        return -EINVAL;
+
+    if (omen_wmi_query(HPWMI_FOURZONE_COLOR_GET, state))
+        return -EIO;
+
+    state[off]   = (rgb &gt;&gt; 16) &amp; 0xff;
+    state[off+1] = (rgb &gt;&gt;  8) &amp; 0xff;
+    state[off+2] =  rgb         &amp; 0xff;
+
+    if (omen_wmi_query(HPWMI_FOURZONE_COLOR_SET, state))
+        return -EIO;
+
+    return count;
+}
+
+/* ---------- raw buffer ---------- */
+
+static ssize_t raw_show(struct kobject *kobj,
+                        struct kobj_attribute *attr,
+                        char *buf)
+{
+    u8 state[128];
+
+    if (omen_wmi_query(HPWMI_FOURZONE_COLOR_GET, state))
+        return -EIO;
+
+    memcpy(buf, state, 128);
+    return 128;
+}
+
+static ssize_t raw_store(struct kobject *kobj,
+                         struct kobj_attribute *attr,
+                         const char *buf,
+                         size_t count)
+{
+    u8 state[128];
+
+    if (count != 128)
+        return -EINVAL;
+
+    memcpy(state, buf, 128);
+
+    if (omen_wmi_query(HPWMI_FOURZONE_COLOR_SET, state))
+        return -EIO;
+
+    return count;
+}
+
+/* ---------- command interface ---------- */
+
+static ssize_t cmd_store(struct kobject *kobj,
+                         struct kobj_attribute *attr,
+                         const char *buf,
+                         size_t count)
+{
+    struct bios_args args = {0};
+    struct acpi_buffer input;
+    struct acpi_buffer output = { ACPI_ALLOCATE_BUFFER, NULL };
+    union acpi_object *obj;
+    unsigned int cmdtype;
+    unsigned int value = 0;
+
+    sscanf(buf, "%u %x", &amp;cmdtype, &amp;value);
+
+    args.signature   = 0x55434553;
+    args.command     = HPWMI_FOURZONE;
+    args.commandtype = cmdtype;
+    args.datasize    = 128;
+
+    memset(args.data, 0, 128);
+    args.data[0] = value;
+
+    input.length  = sizeof(args);
+    input.pointer = &amp;args;
+
+    wmi_evaluate_method(HPWMI_BIOS_GUID, 0, 3, &amp;input, &amp;output);
+
+    obj = output.pointer;
+
+    if (obj &amp;&amp; obj-&gt;type == ACPI_TYPE_BUFFER)
+        print_hex_dump(KERN_INFO,
+                       "omen_cmd: ",
+                       DUMP_PREFIX_OFFSET,
+                       16, 1,
+                       obj-&gt;buffer.pointer,
+                       obj-&gt;buffer.length,
+                       false);
+
+    kfree(obj);
+    return count;
+}
+
+/* ---------- sysfs ---------- */
+
+#define ZONE_ATTR(n) \
+static struct kobj_attribute zone##n##_attr = \
+__ATTR(zone##n, 0664, zone_show, zone_store);
+
+ZONE_ATTR(0)
+ZONE_ATTR(1)
+ZONE_ATTR(2)
+ZONE_ATTR(3)
+
+static struct kobj_attribute raw_attr =
+    __ATTR(raw, 0664, raw_show, raw_store);
+
+static struct kobj_attribute cmd_attr =
+    __ATTR(cmd, 0220, NULL, cmd_store);
+
+static struct attribute *attrs[] = {
+    &amp;zone0_attr.attr,
+    &amp;zone1_attr.attr,
+    &amp;zone2_attr.attr,
+    &amp;zone3_attr.attr,
+    &amp;raw_attr.attr,
+    &amp;cmd_attr.attr,
+    NULL
+};
+
+static struct attribute_group attr_group = {
+    .attrs = attrs,
+};
+
+/* ---------- module ---------- */
+
+static int __init omen_init(void)
+{
+    int ret;
+
+    omen_kobj = kobject_create_and_add("omen_rgb", kernel_kobj);
+    if (!omen_kobj)
+        return -ENOMEM;
+
+    ret = sysfs_create_group(omen_kobj, &amp;attr_group);
+
+    pr_info("omen rgb module loaded\n");
+    return ret;
+}
+
+static void __exit omen_exit(void)
+{
+    kobject_put(omen_kobj);
+    pr_info("omen rgb module unloaded\n");
+}
+
+module_init(omen_init);
+module_exit(omen_exit);
+
+MODULE_LICENSE("GPL");</code></pre>
+        </details>
+
+        <style>
+            details.code-collapse {
+                border: 1px solid #00ff9c33;
+                border-radius: 8px;
+                margin: 16px 0;
+                overflow: hidden;
+            }
+            details.code-collapse summary {
+                cursor: pointer;
+                padding: 10px 16px;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-size: 0.95rem;
+                color: #8be9fd;
+                user-select: none;
+                list-style: none;
+            }
+            details.code-collapse summary::before {
+                content: '▶ ';
+                font-size: 0.75em;
+                opacity: 0.7;
+            }
+            details.code-collapse[open] summary::before {
+                content: '▼ ';
+            }
+            details.code-collapse pre {
+                margin: 0;
+                border: none;
+                border-top: 1px solid #00ff9c33;
+                border-radius: 0;
+            }
+        </style>
+
+
     </div>
+    <p>Once the module is compiled and loaded, the driver will create a small set of interfaces under sysfs:</p>
+
+<p><code>ls /sys/kernel/omen_rgb</code></p>
+
+<p>You should see something like:</p>
+
+<p><code>cmd  raw  zone0  zone1  zone2  zone3</code></p>
+
+<p>Each of these files exposes a different way of interacting with the firmware.</p>
+
+<p>The raw file simply dumps the entire buffer returned by the firmware. You can use cat to view the current state of the RGB lighting.</p>
+
+<p><code>cat /sys/kernel/omen_rgb/raw</code></p>
+
+<p>Similarly, cmd allows commands to be sent to this buffer, like <code>echo "3 ff0000 ff0000 ff0000 ff0000" | sudo tee /sys/kernel/omen_rgb/cmd</code>, this is an unsafe function and intended for easier exploration. Every now and then, you will hit a state where your keyboard light is unresponsive because you messed with the wrong input. Simply reboot your laptop and hold the power button for 30 seconds. This discharges all capacitors and restarts the embedded controller managing our lighting.</p>
+<p>Just like cmd, you can also use something like <code>echo ff0000 | sudo tee /sys/kernel/omen_rgb/zone0</code> to set the color of the zeroth zone and so on.</p> 
+
+<p>Now that we are done with setup, let's start hacking. When I was going through pelrun's code, I found a very interesting comment: </p>
+<p><code>
+
+  if (read_or_write == HPWMI_WRITE) {
+    // Zones start at offset 25. Wonder what's in the rest of the buffer?
+    state[zone->offset + 0] = zone->colors.red;
+    state[zone->offset + 1] = zone->colors.green;
+    state[zone->offset + 2] = zone->colors.blue;
+
+    ret = hp_wmi_perform_query(HPWMI_FOURZONE_COLOR_SET, HPWMI_FOURZONE, &state,
+            sizeof(state), sizeof(state));
+</code></p>
+
+
+    <p>Zones start at offset 25. Which is correct. This is what started off the whole quest. So between the pass message and the zone, there are multiple empty bits that may/may not toggle more functionality that haven't been explored yet. Could be brightness. Could be animations. Could be anything? I decided to test this out by creating a separate Python file, and looping through the most plausible iterations, like so:</p>
+
+    <p><pre><code>
+        import os
+        import time
+
+        CMD = "/sys/kernel/omen_rgb/cmd"
+
+        BUFFER_SIZE = 128
+        VALUES = ["00", "01", "0f", "7f", "ff"]
+
+        for offset in range(4, 25):
+            for v in VALUES:
+
+                buf = ["00"] * BUFFER_SIZE
+                buf[offset] = v
+
+                payload = " ".join(buf)
+
+                os.system(f"echo '3 {payload}' | sudo tee {CMD} > /dev/null")
+
+                print(f"testing offset {offset} -> {v}")
+                time.sleep(1)
+</code></pre></p>
     
+    <p>However, I did not recieve any output. My keyboard lighting remained as-is. Very disappointing :<. But, we have a good set up for experimentation now. We've exposed the raw firmware interface using sysfs, know parts of the buffer, and are on track to discovering more. In the next blog, I'll take a few more different approaches to uncover more of this structre, especially considering how so many more bytes are left. I'll dig through the ACPI tables and try experimenting with other methods. Hopefully this blog helps others as well, to set up a small little kernel module for experimentation. I plan on rewriting everything properly and merging it with the main hp-wmi.c file once this whole project is done. But for now, having a separate module gives a great amount of flexibility to mess around and find out more. Hopefully, this will translate into an omenctl some day!</p>
+
+    <div style="margin-top: 50px; border: 1px solid #00ff9c55; border-radius: 8px; padding: 14px 18px; font-size: 0.9rem; color: #8b949e; line-height: 1.6;">
+        <span style="color: #00ff9c; font-weight: bold;">// AI disclaimer</span><br>
+        Parts of the code in this post were written with AI assistance. All code has been reviewed, tested, and understood before being published here.
+    </div>
+
     <div style="margin-top: 50px; text-align: center;">
         <a href="/blogs" style="color: #00ff9c; text-decoration: none;">[cd ../] Return to Blogs</a>
     </div>
+
 </div>
 
 </body>

@@ -11,5 +11,7 @@ www.turingtested.xyz {
 }
 
 notes.turingtested.xyz {
-	reverse_proxy localhost:3000
+	reverse_proxy localhost:3000 {
+		header_up X-Forwarded-Proto https
+	}
 }

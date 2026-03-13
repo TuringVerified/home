@@ -9,3 +9,7 @@ turingtested.xyz {
 www.turingtested.xyz {
     redir https://turingtested.xyz{uri}
 }
+
+notes.turingtested.xyz {
+	reverse_proxy localhost:3000
+}

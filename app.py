@@ -4,9 +4,6 @@ from flask import Flask, redirect, render_template, send_from_directory
 
 app = Flask(__name__)
 
-# Redirect target for CV
-CV_URL = "https://mega.nz/file/gBI2GTIb#JVTkAmdVdJemgEvu0RA4yfXOWCo24dnw2m6Ra1kvRFU"
-
 @app.route("/")
 def home():
     return render_template("index.html")

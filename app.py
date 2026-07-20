@@ -1,6 +1,9 @@
-from flask import Flask, render_template, send_from_directory
+import os
+
+from flask import Flask, redirect, render_template, send_from_directory
 
 app = Flask(__name__)
+
 
 @app.route("/")
 def home():
@@ -26,5 +29,10 @@ def robots():
 def blog_omen():
     return render_template("blog_omen.html")
 
+
+@app.route("/cv")
+def cv():
+    return render_template("cv_embed.html")
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False, host='0.0.0.0')
